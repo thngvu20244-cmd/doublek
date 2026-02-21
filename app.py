@@ -6,20 +6,23 @@ import os
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
+# ===== TÀI KHOẢN =====
 USER = "admin"
 PASSWORD_HASH = generate_password_hash("123456")
 
+# ===== TRANG CHỦ =====
 @app.route("/")
 def home():
     if "user" in session:
-        return f"Xin chao {session['user']}! <br><a href='/logout'>Dang xuat</a>"
-    return "Ban chua dang nhap <br><a href='/login'>Dang nhap</a>"
+        return f"Xin chào {session['user']} <br><a href='/logout'>Đăng xuất</a>"
+    return "Bạn chưa đăng nhập <br><a href='/login'>Đăng nhập</a>"
 
+# ===== ĐĂNG NHẬP =====
 @app.route("/login", methods=["GET", "POST"])
 def login():
 
     if not check_login_attempt():
-        return "Ban da thu sai qua nhieu lan!"
+        return "Bạn đã thử sai quá nhiều lần!"
 
     if request.method == "POST":
         username = request.form.get("username")
@@ -31,20 +34,14 @@ def login():
             return redirect(url_for("home"))
         else:
             record_failed_attempt()
-            return "Sai tai khoan hoac mat khau!"
+            return "Sai tài khoản hoặc mật khẩu!"
 
     return '''
         <form method="post">
-            <input type="text" name="username" placeholder="Tai khoan"><br>
-            <input type="password" name="password" placeholder="Mat khau"><br>
-            <input type="submit" value="Dang nhap">
+            <input type="text" name="username" placeholder="Tài khoản"><br>
+            <input type="password" name="password" placeholder="Mật khẩu"><br>
+            <input type="submit" value="Đăng nhập">
         </form>
     '''
 
-@app.route("/logout")
-def logout():
-    session.pop("user", None)
-    return redirect(url_for("home"))
-
-if __name__ == "__main__":
-    app.run()
+# ===== ĐĂ
