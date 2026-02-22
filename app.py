@@ -43,7 +43,7 @@ def init_db():
     c.execute("SELECT * FROM users WHERE username='admin'")
     if not c.fetchone():
         c.execute("INSERT INTO users(username,password,role) VALUES(?,?,?)",
-                  ("admin", generate_password_hash("123456"), "admin"))
+                  ("admin", generate_password_hash("Vuduythang"),(("admin"))
 
     conn.commit()
     conn.close()
