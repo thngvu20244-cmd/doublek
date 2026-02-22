@@ -10,17 +10,13 @@ def home():
 <head>
 <meta charset="UTF-8">
 <title>Login</title>
-
-<!-- Icon -->
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-
 <style>
 body{
 display:flex;
 justify-content:center;
 align-items:center;
 height:100vh;
-background:linear-gradient(45deg,#0f2027,#2c5364);
+background:#2c5364;
 font-family:Arial;
 }
 
@@ -52,25 +48,16 @@ cursor:pointer;
 margin-top:10px;
 }
 
-.social{
-display:flex;
-justify-content:space-between;
-margin-top:15px;
+.google{
+background:#DB4437;
+}
+
+.facebook{
+background:#1877F2;
 }
 
 .social button{
-width:48%;
-background:#fff;
-border:1px solid #ccc;
-color:#333;
-font-weight:bold;
-}
-
-.google i{ color:#DB4437; }
-.facebook i{ color:#1877F2; }
-
-.social button:hover{
-background:#f2f2f2;
+margin-top:10px;
 }
 </style>
 </head>
@@ -84,12 +71,8 @@ background:#f2f2f2;
 <input type="password" placeholder="Password">
 <button>Login</button>
 
-<p style="margin-top:15px;">Or login with</p>
-
-<div class="social">
-<button class="google"><i class="fab fa-google"></i> Google</button>
-<button class="facebook"><i class="fab fa-facebook-f"></i> Facebook</button>
-</div>
+<button class="google">Login with Google</button>
+<button class="facebook">Login with Facebook</button>
 
 </div>
 
