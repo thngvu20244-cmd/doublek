@@ -1,0 +1,7 @@
+project/
+│
+├── app.py
+├── database.db
+└── templates/
+      ├── base.html
+      └── login.html
