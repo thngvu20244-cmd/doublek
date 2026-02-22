@@ -1,333 +1,324 @@
-from flask import Flask, request, redirect, url_for, session
+from flask import Flask, render_template_string, request, redirect, session, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
 import sqlite3
 import os
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "super-secret-key")
+app.secret_key = "supersecretkey"
 
-DATABASE = "users.db"
+DB = "database.db"
 
+# ================= DATABASE =================
 
-# ================= INIT DATABASE =================
 def init_db():
-    with sqlite3.connect(DATABASE) as conn:
-        c = conn.cursor()
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
 
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT NOT NULL DEFAULT 'user',
-            is_active INTEGER NOT NULL DEFAULT 1
-        )
-        """)
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE,
+        password TEXT,
+        role TEXT DEFAULT 'user',
+        locked INTEGER DEFAULT 0
+    )''')
 
-        c.execute("""
-        CREATE TABLE IF NOT EXISTS logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            admin TEXT,
-            action TEXT,
-            target TEXT,
-            time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+    c.execute('''CREATE TABLE IF NOT EXISTS logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT,
+        time TEXT
+    )''')
 
-        # Tạo admin mặc định
-        c.execute("SELECT * FROM users WHERE username='admin'")
-        if not c.fetchone():
-            admin_pass = generate_password_hash("123456")
-            c.execute(
-                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                ("admin", admin_pass, "admin")
-            )
+    # tạo admin mặc định
+    c.execute("SELECT * FROM users WHERE username='admin'")
+    if not c.fetchone():
+        c.execute("INSERT INTO users (username,password,role) VALUES (?,?,?)",
+                  ("admin", generate_password_hash("admin123"), "admin"))
 
-        conn.commit()
+    conn.commit()
+    conn.close()
 
+def log_action(text):
+    conn = sqlite3.connect(DB)
+    c = conn.cursor()
+    c.execute("INSERT INTO logs (action,time) VALUES (?,?)",
+              (text, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+    conn.commit()
+    conn.close()
 
 init_db()
 
+# ================= TEMPLATE =================
 
-# ================= LOGIN =================
-@app.route("/", methods=["GET", "POST"])
+base_style = """
+<style>
+body{
+background: linear-gradient(135deg,#667eea,#764ba2);
+font-family: Arial;
+color:white;
+text-align:center;
+}
+.box{
+background:white;
+color:black;
+padding:20px;
+margin:30px auto;
+width:400px;
+border-radius:10px;
+}
+button{
+padding:8px 15px;
+background:#667eea;
+color:white;
+border:none;
+border-radius:5px;
+cursor:pointer;
+}
+a{color:#667eea;text-decoration:none;}
+input{padding:6px;margin:5px;}
+table{width:100%;color:black;}
+</style>
+"""
+
+# ================= ROUTES =================
+
+@app.route("/")
+def home():
+    if "user" not in session:
+        return redirect("/login")
+    return redirect("/dashboard")
+
+# LOGIN
+@app.route("/login", methods=["GET","POST"])
 def login():
-    message = ""
+    if request.method=="POST":
+        u=request.form["username"]
+        p=request.form["password"]
 
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
+        conn=sqlite3.connect(DB)
+        c=conn.cursor()
+        c.execute("SELECT * FROM users WHERE username=?",(u,))
+        user=c.fetchone()
+        conn.close()
 
-        with sqlite3.connect(DATABASE) as conn:
-            c = conn.cursor()
-            c.execute("SELECT id, password, role, is_active FROM users WHERE username=?", (username,))
-            user = c.fetchone()
+        if user and check_password_hash(user[2],p):
+            if user[4]==1:
+                return "Tài khoản bị khóa!"
+            session["user"]=u
+            session["role"]=user[3]
+            log_action(f"{u} đăng nhập")
+            return redirect("/dashboard")
+        return "Sai tài khoản hoặc mật khẩu"
 
-        if user:
-            if user[3] == 0:
-                message = "<p style='color:red;'>Account locked</p>"
-            elif check_password_hash(user[1], password):
-                session["user_id"] = user[0]
-                session["username"] = username
-                session["role"] = user[2]
-                return redirect(url_for("dashboard"))
-            else:
-                message = "<p style='color:red;'>Wrong password</p>"
-        else:
-            message = "<p style='color:red;'>User not found</p>"
+    return render_template_string(base_style+"""
+    <div class="box">
+    <h2>Login</h2>
+    <form method="post">
+    <input name="username" placeholder="Username"><br>
+    <input name="password" type="password" placeholder="Password"><br>
+    <button>Login</button>
+    </form>
+    <a href="/register">Register</a>
+    </div>
+    """)
 
-    return page_template("Login", message, True)
-
-
-# ================= REGISTER =================
-@app.route("/register", methods=["GET", "POST"])
+# REGISTER
+@app.route("/register", methods=["GET","POST"])
 def register():
-    message = ""
+    if request.method=="POST":
+        u=request.form["username"]
+        p=generate_password_hash(request.form["password"])
+        try:
+            conn=sqlite3.connect(DB)
+            c=conn.cursor()
+            c.execute("INSERT INTO users(username,password) VALUES (?,?)",(u,p))
+            conn.commit()
+            conn.close()
+            log_action(f"{u} đăng ký")
+            return redirect("/login")
+        except:
+            return "Username đã tồn tại"
 
-    if request.method == "POST":
-        username = request.form.get("username")
-        raw_password = request.form.get("password")
+    return render_template_string(base_style+"""
+    <div class="box">
+    <h2>Register</h2>
+    <form method="post">
+    <input name="username"><br>
+    <input name="password" type="password"><br>
+    <button>Register</button>
+    </form>
+    </div>
+    """)
 
-        if not username or not raw_password:
-            message = "<p style='color:red;'>Fill all fields</p>"
-        else:
-            password = generate_password_hash(raw_password)
-            try:
-                with sqlite3.connect(DATABASE) as conn:
-                    c = conn.cursor()
-                    c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
-                              (username, password))
-                    conn.commit()
-                return redirect(url_for("login"))
-            except:
-                message = "<p style='color:red;'>Username already exists</p>"
-
-    return page_template("Register", message, False)
-
-
-# ================= DASHBOARD =================
+# DASHBOARD
 @app.route("/dashboard")
 def dashboard():
-    if "username" not in session:
-        return redirect(url_for("login"))
+    if "user" not in session:
+        return redirect("/login")
 
-    admin_link = ""
-    if session.get("role") == "admin":
-        admin_link = '<p><a href="/admin" style="color:white;">Admin Panel</a></p>'
+    if session["role"]=="admin":
+        return redirect("/admin")
 
-    return f"""
-    <body style="background:linear-gradient(45deg,#0f2027,#2c5364);
-    color:white;text-align:center;padding-top:100px;font-family:Arial;">
-        <h1>Welcome {session['username']} 👋</h1>
-        <p>Role: {session['role']}</p>
-        {admin_link}
-        <p><a href="/change-password" style="color:white;">Change Password</a></p>
-        <a href="/logout" style="color:white;">Logout</a>
-    </body>
-    """
+    return render_template_string(base_style+"""
+    <div class="box">
+    <h2>Welcome {{user}}</h2>
+    <p>Role: {{role}}</p>
+    <a href="/change_password">Đổi mật khẩu</a><br><br>
+    <a href="/logout">Logout</a>
+    </div>
+    """,user=session["user"],role=session["role"])
 
-
-# ================= ADMIN PANEL =================
+# ADMIN PANEL
 @app.route("/admin")
 def admin():
-    if session.get("role") != "admin":
-        return redirect(url_for("dashboard"))
+    if "user" not in session or session["role"]!="admin":
+        return "Không có quyền"
 
-    search = request.args.get("search", "")
+    search=request.args.get("search","")
+    conn=sqlite3.connect(DB)
+    c=conn.cursor()
 
-    with sqlite3.connect(DATABASE) as conn:
-        c = conn.cursor()
+    if search:
+        c.execute("SELECT * FROM users WHERE username LIKE ?",('%'+search+'%',))
+    else:
+        c.execute("SELECT * FROM users")
 
-        if search:
-            c.execute("SELECT id, username, role, is_active FROM users WHERE username LIKE ?",
-                      ('%' + search + '%',))
-        else:
-            c.execute("SELECT id, username, role, is_active FROM users")
+    users=c.fetchall()
+    total=len(users)
+    conn.close()
 
-        users = c.fetchall()
-        total_users = len(users)
+    return render_template_string(base_style+"""
+    <div class="box">
+    <h2>ADMIN PANEL</h2>
+    Tổng user: {{total}}<br><br>
 
-    rows = ""
-    for u in users:
-        status = "🟢 Active" if u[3] == 1 else "🔴 Locked"
+    <form>
+    <input name="search" placeholder="Tìm user">
+    <button>Tìm</button>
+    </form>
 
-        rows += f"""
-        <tr>
-            <td>{u[0]}</td>
-            <td>{u[1]}</td>
-            <td>{u[2]}</td>
-            <td>{status}</td>
-            <td>
-                <a href='/toggle/{u[0]}'>Lock/Unlock</a> |
-                <a href='/reset/{u[0]}'>Reset</a> |
-                <a href='/delete/{u[0]}' onclick="return confirm('Are you sure?')">Delete</a>
-            </td>
-        </tr>
-        """
+    <table border="1">
+    <tr><th>User</th><th>Role</th><th>Lock</th><th>Action</th></tr>
+    {% for u in users %}
+    <tr>
+    <td>{{u[1]}}</td>
+    <td>{{u[3]}}</td>
+    <td>{{u[4]}}</td>
+    <td>
+    {% if u[1] != session["user"] %}
+    <a href="/lock/{{u[1]}}">Lock</a>
+    <a href="/unlock/{{u[1]}}">Unlock</a>
+    <a href="/reset/{{u[1]}}">Reset</a>
+    {% endif %}
+    </td>
+    </tr>
+    {% endfor %}
+    </table>
 
-    return f"""
-    <body style="background:linear-gradient(45deg,#0f2027,#2c5364);
-    font-family:Arial;color:white;padding:40px;">
-        <h2>Admin Panel</h2>
-        <p>Total Users: {total_users}</p>
-        <a href="/logs" style="color:white;">View Logs</a><br><br>
+    <br>
+    <a href="/logs">Xem Logs</a><br><br>
+    <a href="/logout">Logout</a>
+    </div>
+    """,users=users,total=total,session=session)
 
-        <form method="GET">
-            <input type="text" name="search" placeholder="Search username..." value="{search}">
-            <button type="submit">Search</button>
-        </form><br>
+# LOCK
+@app.route("/lock/<username>")
+def lock(username):
+    if session.get("role")!="admin":
+        return "Không có quyền"
+    conn=sqlite3.connect(DB)
+    c=conn.cursor()
+    c.execute("UPDATE users SET locked=1 WHERE username=?",(username,))
+    conn.commit()
+    conn.close()
+    log_action(f"Lock {username}")
+    return redirect("/admin")
 
-        <table border="1" cellpadding="10" style="background:white;color:black;">
-            <tr>
-                <th>ID</th>
-                <th>Username</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-            {rows}
-        </table>
+# UNLOCK
+@app.route("/unlock/<username>")
+def unlock(username):
+    if session.get("role")!="admin":
+        return "Không có quyền"
+    conn=sqlite3.connect(DB)
+    c=conn.cursor()
+    c.execute("UPDATE users SET locked=0 WHERE username=?",(username,))
+    conn.commit()
+    conn.close()
+    log_action(f"Unlock {username}")
+    return redirect("/admin")
 
-        <br><a href="/dashboard" style="color:white;">Back</a>
-    </body>
-    """
+# RESET PASS
+@app.route("/reset/<username>")
+def reset(username):
+    if session.get("role")!="admin":
+        return "Không có quyền"
+    conn=sqlite3.connect(DB)
+    c=conn.cursor()
+    c.execute("UPDATE users SET password=? WHERE username=?",
+              (generate_password_hash("123456"),username))
+    conn.commit()
+    conn.close()
+    log_action(f"Reset password {username}")
+    return redirect("/admin")
 
-
-# ================= DELETE =================
-@app.route("/delete/<int:user_id>")
-def delete(user_id):
-    if session.get("role") != "admin":
-        return redirect(url_for("dashboard"))
-
-    if user_id == session.get("user_id"):
-        return "<h3 style='color:red;text-align:center;'>Cannot delete yourself!</h3><a href='/admin'>Back</a>"
-
-    with sqlite3.connect(DATABASE) as conn:
-        c = conn.cursor()
-
-        c.execute("SELECT role FROM users WHERE id=?", (user_id,))
-        result = c.fetchone()
-
-        if not result:
-            return redirect(url_for("admin"))
-
-        if result[0] == "admin":
-            return "<h3 style='color:red;text-align:center;'>Cannot delete another admin!</h3><a href='/admin'>Back</a>"
-
-        c.execute("DELETE FROM users WHERE id=?", (user_id,))
-        c.execute("INSERT INTO logs (admin, action, target) VALUES (?, ?, ?)",
-                  (session["username"], "delete user", str(user_id)))
-        conn.commit()
-
-    return redirect(url_for("admin"))
-
-
-# ================= TOGGLE =================
-@app.route("/toggle/<int:user_id>")
-def toggle(user_id):
-    if session.get("role") != "admin":
-        return redirect(url_for("dashboard"))
-
-    with sqlite3.connect(DATABASE) as conn:
-        c = conn.cursor()
-        c.execute("SELECT is_active FROM users WHERE id=?", (user_id,))
-        result = c.fetchone()
-
-        if not result:
-            return redirect(url_for("admin"))
-
-        new_status = 0 if result[0] == 1 else 1
-        c.execute("UPDATE users SET is_active=? WHERE id=?", (new_status, user_id))
-
-        c.execute("INSERT INTO logs (admin, action, target) VALUES (?, ?, ?)",
-                  (session["username"], "toggle lock", str(user_id)))
-
-        conn.commit()
-
-    return redirect(url_for("admin"))
-
-
-# ================= RESET PASSWORD =================
-@app.route("/reset/<int:user_id>")
-def reset_password(user_id):
-    if session.get("role") != "admin":
-        return redirect(url_for("dashboard"))
-
-    new_password = generate_password_hash("123456")
-
-    with sqlite3.connect(DATABASE) as conn:
-        c = conn.cursor()
-        c.execute("UPDATE users SET password=? WHERE id=?", (new_password, user_id))
-        c.execute("INSERT INTO logs (admin, action, target) VALUES (?, ?, ?)",
-                  (session["username"], "reset password", str(user_id)))
-        conn.commit()
-
-    return "<h3 style='color:green;text-align:center;'>Password reset to 123456</h3><a href='/admin'>Back</a>"
-
-
-# ================= VIEW LOGS =================
-@app.route("/logs")
-def view_logs():
-    if session.get("role") != "admin":
-        return redirect(url_for("dashboard"))
-
-    with sqlite3.connect(DATABASE) as conn:
-        c = conn.cursor()
-        c.execute("SELECT admin, action, target, time FROM logs ORDER BY time DESC")
-        logs = c.fetchall()
-
-    rows = ""
-    for log in logs:
-        rows += f"<tr><td>{log[0]}</td><td>{log[1]}</td><td>{log[2]}</td><td>{log[3]}</td></tr>"
-
-    return f"""
-    <body style="background:linear-gradient(45deg,#0f2027,#2c5364);
-    font-family:Arial;color:white;padding:40px;">
-        <h2>System Logs</h2>
-        <table border="1" cellpadding="10" style="background:white;color:black;">
-            <tr><th>Admin</th><th>Action</th><th>User ID</th><th>Time</th></tr>
-            {rows}
-        </table>
-        <br><a href="/admin" style="color:white;">Back</a>
-    </body>
-    """
-
-
-# ================= CHANGE PASSWORD =================
-@app.route("/change-password", methods=["GET", "POST"])
+# CHANGE PASSWORD
+@app.route("/change_password", methods=["GET","POST"])
 def change_password():
-    if "username" not in session:
-        return redirect(url_for("login"))
+    if "user" not in session:
+        return redirect("/login")
 
-    message = ""
+    if request.method=="POST":
+        new=generate_password_hash(request.form["new"])
+        conn=sqlite3.connect(DB)
+        c=conn.cursor()
+        c.execute("UPDATE users SET password=? WHERE username=?",
+                  (new,session["user"]))
+        conn.commit()
+        conn.close()
+        log_action(f"{session['user']} đổi mật khẩu")
+        return redirect("/dashboard")
 
-    if request.method == "POST":
-        old_password = request.form.get("old_password")
-        new_password = request.form.get("new_password")
+    return render_template_string(base_style+"""
+    <div class="box">
+    <h2>Đổi mật khẩu</h2>
+    <form method="post">
+    <input name="new" type="password"><br>
+    <button>Đổi</button>
+    </form>
+    </div>
+    """)
 
-        with sqlite3.connect(DATABASE) as conn:
-            c = conn.cursor()
-            c.execute("SELECT password FROM users WHERE id=?", (session["user_id"],))
-            user = c.fetchone()
+# LOGS
+@app.route("/logs")
+def logs():
+    if session.get("role")!="admin":
+        return "Không có quyền"
 
-            if user and check_password_hash(user[0], old_password):
-                new_hash = generate_password_hash(new_password)
-                c.execute("UPDATE users SET password=? WHERE id=?", (new_hash, session["user_id"]))
-                conn.commit()
-                message = "<p style='color:green;'>Password changed successfully!</p>"
-            else:
-                message = "<p style='color:red;'>Wrong old password</p>"
+    conn=sqlite3.connect(DB)
+    c=conn.cursor()
+    c.execute("SELECT * FROM logs ORDER BY id DESC")
+    data=c.fetchall()
+    conn.close()
 
-    return f"""
-    <body style="background:linear-gradient(45deg,#0f2027,#2c5364);
-    font-family:Arial;color:white;text-align:center;padding-top:100px;">
-        <h2>Change Password</h2>
-        <form method="POST">
-            <input type="password" name="old_password" placeholder="Old Password" required><br><br>
-            <input type="password" name="new_password" placeholder="New Password" required><br><br>
-            <button type="submit">Change</button>
-        </form>
-        {message}
-        <br><a href="/dashboard" style="color:white;">Back</a>
-    </body>
-    """
+    return render_template_string(base_style+"""
+    <div class="box">
+    <h2>System Logs</h2>
+    <table border="1">
+    {% for l in data %}
+    <tr><td>{{l[1]}}</td><td>{{l[2]}}</td></tr>
+    {% endfor %}
+    </table>
+    <br><a href="/admin">Back</a>
+    </div>
+    """,data=data)
+
+# LOGOUT
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+# ================= RUN =================
+
+if __name__=="__main__":
+    app.run(host="0.0.0.0",port=5000)
