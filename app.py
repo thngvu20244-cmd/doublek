@@ -1,16 +1,3 @@
-from flask import render_template
-
-@app.route("/login", methods=["GET", "POST"])
+@app.route("/login")
 def login():
-
-    if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
-
-        if username == USER and check_password_hash(PASSWORD_HASH, password):
-            session["user"] = username
-            return redirect(url_for("home"))
-        else:
-            return "Sai tài khoản hoặc mật khẩu!"
-
-    return render_template("login.html")
+    return "Login Page"
