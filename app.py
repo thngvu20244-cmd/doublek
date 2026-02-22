@@ -382,3 +382,48 @@ def logout():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+
+    <header class="navbar">
+        <h2>MyApp Dashboard</h2>
+        <button onclick="logout()">Logout</button>
+    </header>
+
+    <section class="welcome">
+        <h1>Welcome Back 👋</h1>
+        <p>You have successfully logged in.</p>
+    </section>
+
+    <section class="cards">
+        <div class="card">
+            <h3>Profile</h3>
+            <p>View and edit your profile information.</p>
+        </div>
+
+        <div class="card">
+            <h3>Settings</h3>
+            <p>Manage account settings and preferences.</p>
+        </div>
+
+        <div class="card">
+            <h3>Reports</h3>
+            <p>Check your recent activity and reports.</p>
+        </div>
+    </section>
+
+    <script>
+        function logout() {
+            alert("Logged out successfully!");
+            window.location.href = "login.html";
+        }
+    </script>
+
+</body>
+</html>
