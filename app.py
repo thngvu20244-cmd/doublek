@@ -9,130 +9,89 @@ def home():
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Login & Register</title>
-<style>
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:Arial;
-}
+<title>Login</title>
 
+<!-- Icon -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+<style>
 body{
 display:flex;
 justify-content:center;
 align-items:center;
 height:100vh;
 background:linear-gradient(45deg,#0f2027,#2c5364);
+font-family:Arial;
 }
 
-.container{
-position:relative;
-width:850px;
-height:500px;
+.box{
 background:#fff;
-border-radius:20px;
-overflow:hidden;
-box-shadow:0 15px 40px rgba(0,0,0,0.3);
-}
-
-.form-box{
-position:absolute;
-width:50%;
-height:100%;
-display:flex;
-justify-content:center;
-align-items:center;
-flex-direction:column;
 padding:40px;
-transition:.6s ease-in-out;
+border-radius:15px;
+width:320px;
+text-align:center;
+box-shadow:0 10px 30px rgba(0,0,0,0.3);
 }
-
-.login{ right:0; }
-.register{ left:0; }
-
-h2{ margin-bottom:20px; }
 
 input{
 width:100%;
-padding:12px;
+padding:10px;
 margin:10px 0;
 border-radius:8px;
 border:1px solid #ccc;
 }
 
 button{
-padding:12px 40px;
+width:100%;
+padding:10px;
 border:none;
-border-radius:25px;
+border-radius:8px;
 background:#2c5364;
 color:#fff;
 cursor:pointer;
 margin-top:10px;
 }
 
-.overlay{
-position:absolute;
-width:50%;
-height:100%;
-background:linear-gradient(45deg,#0f2027,#2c5364);
-color:#fff;
+.social{
 display:flex;
-justify-content:center;
-align-items:center;
-flex-direction:column;
-text-align:center;
-padding:40px;
-transition:.6s ease-in-out;
+justify-content:space-between;
+margin-top:15px;
 }
 
-.overlay.left{ left:0; }
-.overlay.right{ right:0; }
+.social button{
+width:48%;
+background:#fff;
+border:1px solid #ccc;
+color:#333;
+font-weight:bold;
+}
 
-.container.active .login{ transform:translateX(-100%); }
-.container.active .register{ transform:translateX(100%); }
-.container.active .overlay.left{ transform:translateX(100%); }
-.container.active .overlay.right{ transform:translateX(-100%); }
+.google i{ color:#DB4437; }
+.facebook i{ color:#1877F2; }
 
+.social button:hover{
+background:#f2f2f2;
+}
 </style>
 </head>
+
 <body>
 
-<div class="container" id="container">
-
-<div class="form-box register">
-<h2>Registration</h2>
-<input type="text" placeholder="Username">
-<input type="password" placeholder="Password">
-<button>Register</button>
-</div>
-
-<div class="form-box login">
+<div class="box">
 <h2>Login</h2>
+
 <input type="text" placeholder="Username">
 <input type="password" placeholder="Password">
 <button>Login</button>
-</div>
 
-<div class="overlay left">
-<h2>Hello, Welcome!</h2>
-<p>Don't have an account?</p>
-<button onclick="toggle()">Register</button>
-</div>
+<p style="margin-top:15px;">Or login with</p>
 
-<div class="overlay right">
-<h2>Welcome Back!</h2>
-<p>Already have an account?</p>
-<button onclick="toggle()">Login</button>
+<div class="social">
+<button class="google"><i class="fab fa-google"></i> Google</button>
+<button class="facebook"><i class="fab fa-facebook-f"></i> Facebook</button>
 </div>
 
 </div>
-
-<script>
-function toggle(){
-document.getElementById("container").classList.toggle("active");
-}
-</script>
 
 </body>
 </html>
