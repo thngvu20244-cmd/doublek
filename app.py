@@ -1,30 +1,33 @@
-            from flask import Flask, request, redirect, url_for, session
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
+import sqlite3
 import os
 
 app = Flask(__name__)
 
-# Cấu hình
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(24))
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///users.db"
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# Secret key an toàn
+app.secret_key = os.environ.get("SECRET_KEY", "super-secret-key")
 
-db = SQLAlchemy(app)
+DATABASE = "users.db"
 
 
 # =========================
-# MODEL (TẠO BẢNG)
+# TẠO DATABASE
 # =========================
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(100), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
+def init_db():
+    with sqlite3.connect(DATABASE) as conn:
+        c = conn.cursor()
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL
+            )
+        """)
+        conn.commit()
 
 
-# Tạo database
-with app.app_context():
-    db.create_all()
+init_db()
 
 
 # =========================
@@ -41,15 +44,18 @@ def login():
         if not username or not password:
             message = "<p style='color:red;'>Please fill all fields</p>"
         else:
-            user = User.query.filter_by(username=username).first()
+            with sqlite3.connect(DATABASE) as conn:
+                c = conn.cursor()
+                c.execute("SELECT password FROM users WHERE username = ?", (username,))
+                user = c.fetchone()
 
-            if user and check_password_hash(user.password, password):
-                session["user"] = user.username
+            if user and check_password_hash(user[0], password):
+                session["user"] = username
                 return redirect(url_for("dashboard"))
             else:
                 message = "<p style='color:red;'>Invalid username or password</p>"
 
-    return page_template("Login", message, register_link=True)
+    return page_template("Login", message, True)
 
 
 # =========================
@@ -66,16 +72,23 @@ def register():
         if not username or not password:
             message = "<p style='color:red;'>Please fill all fields</p>"
         else:
-            if User.query.filter_by(username=username).first():
-                message = "<p style='color:red;'>Username already exists</p>"
-            else:
-                hashed_password = generate_password_hash(password)
-                new_user = User(username=username, password=hashed_password)
-                db.session.add(new_user)
-                db.session.commit()
+            hashed_password = generate_password_hash(password)
+
+            try:
+                with sqlite3.connect(DATABASE) as conn:
+                    c = conn.cursor()
+                    c.execute(
+                        "INSERT INTO users (username, password) VALUES (?, ?)",
+                        (username, hashed_password)
+                    )
+                    conn.commit()
+
                 return redirect(url_for("login"))
 
-    return page_template("Register", message, register_link=False)
+            except sqlite3.IntegrityError:
+                message = "<p style='color:red;'>Username already exists</p>"
+
+    return page_template("Register", message, False)
 
 
 # =========================
@@ -112,7 +125,6 @@ def logout():
 # TEMPLATE
 # =========================
 def page_template(title, message, register_link):
-    link = ""
     if register_link:
         link = '<p>Don\'t have account? <a href="/register">Register</a></p>'
     else:
@@ -183,7 +195,8 @@ a{{ text-decoration:none; color:#2c5364; }}
 
 
 # =========================
-# RUN APP
+# RUN (CHO LOCAL)
 # =========================
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)         
