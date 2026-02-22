@@ -1,78 +1,86 @@
-from flask import Flask, request, redirect, url_for, session
+            from flask import Flask, request, redirect, url_for, session
+from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-import sqlite3
 import os
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
 
-DATABASE = "users.db"
+# Cấu hình
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", os.urandom(24))
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///users.db"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-
-# Tạo database nếu chưa có
-def init_db():
-    conn = sqlite3.connect(DATABASE)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-init_db()
+db = SQLAlchemy(app)
 
 
+# =========================
+# MODEL (TẠO BẢNG)
+# =========================
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+
+
+# Tạo database
+with app.app_context():
+    db.create_all()
+
+
+# =========================
+# LOGIN
+# =========================
 @app.route("/", methods=["GET", "POST"])
 def login():
     message = ""
 
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
 
-        conn = sqlite3.connect(DATABASE)
-        c = conn.cursor()
-        c.execute("SELECT password FROM users WHERE username = ?", (username,))
-        user = c.fetchone()
-        conn.close()
-
-        if user and check_password_hash(user[0], password):
-            session["user"] = username
-            return redirect(url_for("dashboard"))
+        if not username or not password:
+            message = "<p style='color:red;'>Please fill all fields</p>"
         else:
-            message = "<p style='color:red;'>Invalid username or password</p>"
+            user = User.query.filter_by(username=username).first()
+
+            if user and check_password_hash(user.password, password):
+                session["user"] = user.username
+                return redirect(url_for("dashboard"))
+            else:
+                message = "<p style='color:red;'>Invalid username or password</p>"
 
     return page_template("Login", message, register_link=True)
 
 
+# =========================
+# REGISTER
+# =========================
 @app.route("/register", methods=["GET", "POST"])
 def register():
     message = ""
 
     if request.method == "POST":
-        username = request.form.get("username")
-        password = request.form.get("password")
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "").strip()
 
-        hashed_password = generate_password_hash(password)
-
-        try:
-            conn = sqlite3.connect(DATABASE)
-            c = conn.cursor()
-            c.execute("INSERT INTO users (username, password) VALUES (?, ?)",
-                      (username, hashed_password))
-            conn.commit()
-            conn.close()
-            return redirect(url_for("login"))
-        except:
-            message = "<p style='color:red;'>Username already exists</p>"
+        if not username or not password:
+            message = "<p style='color:red;'>Please fill all fields</p>"
+        else:
+            if User.query.filter_by(username=username).first():
+                message = "<p style='color:red;'>Username already exists</p>"
+            else:
+                hashed_password = generate_password_hash(password)
+                new_user = User(username=username, password=hashed_password)
+                db.session.add(new_user)
+                db.session.commit()
+                return redirect(url_for("login"))
 
     return page_template("Register", message, register_link=False)
 
 
+# =========================
+# DASHBOARD
+# =========================
 @app.route("/dashboard")
 def dashboard():
     if "user" not in session:
@@ -91,16 +99,22 @@ def dashboard():
     """
 
 
+# =========================
+# LOGOUT
+# =========================
 @app.route("/logout")
 def logout():
-    session.pop("user", None)
+    session.clear()
     return redirect(url_for("login"))
 
 
+# =========================
+# TEMPLATE
+# =========================
 def page_template(title, message, register_link):
     link = ""
     if register_link:
-        link = '<p>Don\\'t have account? <a href="/register">Register</a></p>'
+        link = '<p>Don\'t have account? <a href="/register">Register</a></p>'
     else:
         link = '<p>Already have account? <a href="/">Login</a></p>'
 
@@ -168,5 +182,8 @@ a{{ text-decoration:none; color:#2c5364; }}
 """
 
 
+# =========================
+# RUN APP
+# =========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    app.run(debug=True)
